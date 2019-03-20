@@ -65,14 +65,14 @@
 </template>
 
 <script>
-// import { exportJsonToExcel } from '@/vendor/Export2Excel';
+import { exportJsonToExcel } from '@/vendor/Export2Excel';
 import xlsx from 'xlsx';
 
 export default {
     data() {
         return {
             loading: false,
-            step: 0,
+            step: 2,
             typehead: [
                 '序号',
                 '一级分类',
@@ -432,15 +432,15 @@ export default {
             });
         },
         exportData() {
-            let head = this.xxx(this.statslist);
-            console.log(head);
-            // exportJsonToExcel([], [], this.datatime + '日报');
+            let head = this.formatStatsHead(this.statshead);
+            let data = this.statslist.map(v => head.map(j => v[j.dataIndex]));
+            exportJsonToExcel(head.map(v => v.dataIndex === 'corp' ? '单位名称' : v.dataIndex), data, `${this.datatime.join('|')}日报`);
         },
-        xxx(data) {
+        formatStatsHead(data) {
             let list = [];
             data.forEach(v => {
                 if (!v.children || v.children.length === 0) return list.push(v);
-                list = [ ...list, ...this.xxx(v.children) ];
+                list = [ ...list, ...this.formatStatsHead(v.children) ];
             });
             return list;
         }
