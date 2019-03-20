@@ -21,25 +21,34 @@
                 </div>
             </template>
         </div>
-        <div class="box" v-if="step === 1" v-loading="loading">
+        <div class="box active" v-if="step === 1" v-loading="loading">
             <input @change="datafile('data')" ref="datafile" type="file" hidden>
             <template v-if="datalist.length === 0">
                 <el-button size="small" @click="$refs.datafile.click()" class="center">点击选择文件</el-button>
             </template>
             <template v-else>
-                <el-table :data="data" height="100%">
+                <el-table :data="list" height="100%">
                     <el-table-column v-for="(item, i) in datahead" :key="i" :prop="'data'+i" :label="item" :width="item.length * 30"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
                     <el-button size="small" @click="$refs.datafile.click()">重新选择</el-button>
-                    <el-button size="small" @click="step++" :disabled="datatime.length === 0">生成日报</el-button>
+                    <el-button size="small" @click="step++, generate()" :disabled="!datatime || datatime && datatime.length === 0">生成日报</el-button>
                 </div>
                 <div class="box-select-bottom">
-                    <el-select v-model="datatime" multiple size="small" placeholder="选择日期">
-                        <el-option v-for="item in timelist" :key="item" :label="item" :value="item"></el-option>
-                    </el-select>
+                    <el-date-picker size="small" type="dates" :picker-options="pickerOptions" :default-value="defaultTime" v-model="datatime" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
                 </div>
-                <div class="sum">当前:{{data.length}}丨总计:{{sum}}</div>
+                <div class="sum">
+                    <el-pagination
+                        @size-change="handleSizeChange"
+                        @current-change="handleCurrentChange"
+                        :current-page="page"
+                        :page-sizes="[10, 20, 50, 100]"
+                        :page-size="size"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :total="count">
+                    </el-pagination>
+                    <span>总计条数：{{sum}}</span>
+                </div>
             </template>
             <el-button size="small" @click="step--" class="box-btn-bottom-left">上一步</el-button>
         </div>
@@ -54,9 +63,7 @@
                 </el-table-column>
             </el-table>
             <div class="box-btn-bottom-right">
-                <el-select v-model="datatime" @change="generate()" multiple size="small" placeholder="选择日期">
-                    <el-option v-for="item in timelist" :key="item" :label="item" :value="item"></el-option>
-                </el-select>
+                <el-date-picker size="small" type="dates" :picker-options="pickerOptions" v-model="datatime" :default-value="defaultTime" @change="generate()" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
                 <el-button size="small" @click="exportData">导出</el-button>
             </div>
             <el-button size="small" @click="step--" class="box-btn-bottom-left">上一步</el-button>
@@ -72,7 +79,7 @@ export default {
     data() {
         return {
             loading: false,
-            step: 2,
+            step: 0,
             typehead: [
                 '序号',
                 '一级分类',
@@ -123,25 +130,103 @@ export default {
             two: '二级分类',
             three: '三级分类',
             time: '受理时间', // 日期
-            sum: 0 // 总计数量
+            sum: 0, // 总计数量
+            page: 1, // 当前所在页数
+            size: 20, // 当前显示数量
+            count: 0, // 当前统计
+            pickerOptions: {},
+            dataStats: []
+        };
+    },
+    created() {
+        let _this = this;
+        this.pickerOptions = {
+            shortcuts: [{
+                text: '全部',
+                onClick(picker) {
+                    picker.$emit('pick', _this.timelist);
+                }
+            }, {
+                text: '最近一周',
+                onClick(picker) {
+                    const date = new Date();
+                    let list = [];
+                    for (let i = 0; i <= 7 - 1; i++) {
+                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
+                    }
+                    list = list.map(v => {
+                        let y = new Date(v).getFullYear(),
+                            m = new Date(v).getMonth() + 1,
+                            d = new Date(v).getDate();
+                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+                    });
+                    picker.$emit('pick', list);
+                }
+            }, {
+                text: '最近一个月',
+                onClick(picker) {
+                    const date = new Date();
+                    let list = [];
+                    for (let i = 0; i <= 30 - 1; i++) {
+                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
+                    }
+                    list = list.map(v => {
+                        let y = new Date(v).getFullYear(),
+                            m = new Date(v).getMonth() + 1,
+                            d = new Date(v).getDate();
+                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+                    });
+                    picker.$emit('pick', list);
+                }
+            }, {
+                text: '最近三个月',
+                onClick(picker) {
+                    const date = new Date();
+                    let list = [];
+                    for (let i = 0; i <= 90 - 1; i++) {
+                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
+                    }
+                    list = list.map(v => {
+                        let y = new Date(v).getFullYear(),
+                            m = new Date(v).getMonth() + 1,
+                            d = new Date(v).getDate();
+                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+                    });
+                    picker.$emit('pick', list);
+                }
+            }]
         };
     },
     computed: {
-        dataStats() {
-            let item = this.datalist.filter((v, i) => this.datatime.indexOf(v.time) >= 0);
-            let data = [];
-            for (let i in item) {
-                data = [...data, ...item[i].data];
-            }
-            return [{ data }];
-        },
         data() {
-            let item = this.datalist.filter((v, i) => this.datatime.indexOf(v.time) >= 0);
+            let time = !this.datatime ? [] : this.datatime;
+            let item = this.datalist.filter((v, i) => time.indexOf(v.time) >= 0);
             let data = [];
             for (let i in item) {
                 data = [...data, ...item[i].data];
             }
             return data;
+        },
+        list() {
+            let list = this.data.filter((v, i) => this.page * this.size - this.size < i + 1 && i + 1 < this.page * this.size);
+            return list;
+        },
+        defaultTime() {
+            return this.datatime && this.datatime.length !== 0 ? this.datatime[0] : this.timelist[0];
+        }
+    },
+    watch: {
+        data(val) {
+            this.count = val.length;
+        },
+        datatime(val) {
+            let time = !val ? [] : val;
+            let item = this.datalist.filter((v, i) => time.indexOf(v.time) >= 0);
+            let data = [];
+            for (let i in item) {
+                data = [...data, ...item[i].data];
+            }
+            this.dataStats = [{ data }];
         }
     },
     mounted() {
@@ -319,7 +404,7 @@ export default {
                             }
                             obj.data.push(m);
                         });
-                        this.datatime = [this.timelist[0]];
+                        this.datatime = this.timelist;
                         this.datalist = statslist;
                         this.loading = false;
                         this.generate();
@@ -436,6 +521,7 @@ export default {
             let data = this.statslist.map(v => head.map(j => v[j.dataIndex]));
             exportJsonToExcel(head.map(v => v.dataIndex === 'corp' ? '单位名称' : v.dataIndex), data, `${this.datatime.join('|')}日报`);
         },
+        // 格式化表头（便于导出功能使用）
         formatStatsHead(data) {
             let list = [];
             data.forEach(v => {
@@ -443,6 +529,12 @@ export default {
                 list = [ ...list, ...this.formatStatsHead(v.children) ];
             });
             return list;
+        },
+        handleSizeChange(val) {
+            this.size = val;
+        },
+        handleCurrentChange(val) {
+            this.page = val;
         }
     }
 };
@@ -490,14 +582,23 @@ body,
 .box {
   width: 100%;
   height: 100%;
-  padding-bottom: 102px;
+  padding-bottom: 42px;
   position: relative;
+  &.active {
+    padding-bottom: 102px;
+    .box-select-bottom {
+        bottom: 20px;
+    }
+    [class*='box-btn-bottom'] {
+        bottom: -15px;
+    }
+  }
 }
 [class*='box-btn'] {
     position: absolute;
 }
 [class*='box-btn-bottom'] {
-    bottom: 60px;
+    bottom: -5px;
 }
 .box-btn-bottom-right {
     right: 0;
@@ -510,8 +611,8 @@ body,
     width: 100%;
     height: 40px;
     overflow: auto;
-    bottom: 10px;
-    .el-select {
+    bottom: 0;
+    .el-date-editor.el-input, .el-date-editor.el-input__inner {
         width: 100%;
     }
 }
@@ -523,9 +624,17 @@ body,
 }
 .sum {
     position: absolute;
-    bottom: -10px;
-    height: 20px;
+    bottom: 70px;
+    height: 30px;
     font-size: 14px;
     color: #999;
+    width: 100%;
+    .el-pagination {
+        display: inline-block;
+    }
+    > span {
+        float: right;
+        line-height: 30px;
+    }
 }
 </style>
