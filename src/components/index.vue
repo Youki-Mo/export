@@ -8,31 +8,27 @@
         </el-steps>
         <div ref="box" class="box" v-if="step === 0" v-loading="loading">
             <input @change="typefile('type')" ref="typefile" type="file" hidden>
-            <template v-if="typelist.length === 0">
-                <el-button size="small" @click="$refs.typefile.click()" class="center">点击选择文件</el-button>
-            </template>
-            <template v-else>
-                <el-table :data="typelist" height="100%">
+            <el-button v-show="typelist.length === 0" size="small" @click="$refs.typefile.click()" class="center">点击选择文件</el-button>
+            <div class="box-content" v-show="typelist.length !== 0">
+                <el-table ref="table1" :data="typelist" height="100%">
                     <el-table-column v-for="(item, i) in typehead" :key="i" :prop="'type'+i" :label="item"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
                     <el-button size="small" @click="$refs.typefile.click()">重新选择</el-button>
                     <el-button size="small" @click="step++">下一步</el-button>
                 </div>
-            </template>
+            </div>
         </div>
         <div class="box active" v-if="step === 1" v-loading="loading">
             <input @change="datafile('data')" ref="datafile" type="file" hidden>
-            <template v-if="datalist.length === 0">
-                <el-button size="small" @click="$refs.datafile.click()" class="center">点击选择文件</el-button>
-            </template>
-            <template v-else>
-                <el-table :data="list" height="100%">
+            <el-button v-show="datalist.length === 0" size="small" @click="$refs.datafile.click()" class="center">点击选择文件</el-button>
+            <div class="box-content" v-show="datalist.length !== 0">
+                <el-table ref="table2" :data="list" height="100%">
                     <el-table-column v-for="(item, i) in datahead" :key="i" :prop="'data'+i" :label="item" :width="item.length * 30"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
                     <el-button size="small" @click="$refs.datafile.click()">重新选择</el-button>
-                    <el-button size="small" @click="step++, generate()" :disabled="!datatime || datatime && datatime.length === 0">生成日报</el-button>
+                    <el-button size="small" @click="step++, generate()" :disabled="count === 0">生成日报</el-button>
                 </div>
                 <div class="box-select-bottom">
                     <el-date-picker size="small" type="dates" :picker-options="pickerOptions" :default-value="defaultTime" v-model="datatime" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
@@ -49,11 +45,11 @@
                     </el-pagination>
                     <span>总计条数：{{sum}}</span>
                 </div>
-            </template>
+            </div>
             <el-button size="small" @click="step--" class="box-btn-bottom-left">上一步</el-button>
         </div>
         <div class="box auto" v-if="step === 2">
-            <el-table ref="data" :data="statslist" height="100%">
+            <el-table ref="table3" :data="statslist" height="100%">
                 <el-table-column v-for="(a, i) in statshead" :key="i" :label="a.title" :prop="a.dataIndex">
                     <el-table-column v-for="(b, n) in a.children" :key="n" :label="b.title" :prop="b.dataIndex">
                         <el-table-column v-for="(c, m) in b.children" :key="m" :prop="c.dataIndex" :label="c.title" :width="c.width * 10">
@@ -227,6 +223,9 @@ export default {
                 data = [...data, ...item[i].data];
             }
             this.dataStats = [{ data }];
+        },
+        step(val) {
+            console.log(this.$refs[`table${val + 1}`]);
         }
     },
     mounted() {
@@ -365,6 +364,7 @@ export default {
         // 导入数据表
         datafile(name) {
             let input = this.$refs.datafile.files[0];
+            this.timelist = [];
             if (input) {
                 this.loading = true;
                 let reader = new FileReader();
@@ -593,6 +593,9 @@ body,
         bottom: -15px;
     }
   }
+}
+.box-content {
+    height: 100%;
 }
 [class*='box-btn'] {
     position: absolute;
