@@ -84,6 +84,11 @@
             <el-table :data="notType">
                 <el-table-column type="index"></el-table-column>
                 <el-table-column label="业务子类型" prop="name"></el-table-column>
+                <el-table-column label="操作" :width="80">
+                    <template slot-scope="scope">
+                        <el-button size="small" type="text" v-clipboard:copy="scope.row.name" v-clipboard:success="onCopySuccess" v-clipboard:error="onCopyError">复制</el-button>
+                    </template>
+                </el-table-column>
             </el-table>
             <template slot="footer">
                 <el-button size="small" @click="notTypeDialog = false" type="primary">关闭</el-button>
@@ -577,6 +582,12 @@ export default {
                 return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
             });
             return list;
+        },
+        onCopySuccess() {
+            this.$message({ message: '复制成功！', type: 'success' });
+        },
+        onCopyError() {
+            this.$message.error('复制失败！');
         }
     }
 };
