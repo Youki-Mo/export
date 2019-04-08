@@ -14,8 +14,8 @@
                     <el-table-column v-for="(item, i) in typehead" :key="i" :prop="'type'+i" :label="item"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
-                    <el-button size="small" @click="$refs.typefile.click()">重新选择</el-button>
-                    <el-button size="small" @click="step++">下一步</el-button>
+                    <el-button size="small" @click="$refs.typefile.click()" type="warning">重新选择</el-button>
+                    <el-button size="small" @click="step++" type="primary">下一步</el-button>
                 </div>
             </div>
         </div>
@@ -24,12 +24,21 @@
             <el-button v-show="datalist.length === 0" size="small" @click="$refs.datafile.click()" class="center">点击选择文件</el-button>
             <div class="box-content" v-show="datalist.length !== 0">
                 <el-table ref="table2" :data="list" height="100%">
+                    <el-table-column type="index"></el-table-column>
                     <el-table-column v-for="(item, i) in datahead" :key="i" :prop="'data'+i" :label="item" :width="item.length * 30"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
-                    <el-date-picker size="small" type="daterange" :picker-options="pickerOptions" v-model="datatime" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
-                    <el-button size="small" @click="$refs.datafile.click()">重新选择</el-button>
-                    <el-button size="small" @click="step++, generate()" :disabled="count === 0">生成日报</el-button>
+                    <el-date-picker
+                        size="small"
+                        type="daterange"
+                        :picker-options="pickerOptions"
+                        v-model="datatime"
+                        value-format="yyyy-MM-dd"
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"></el-date-picker>
+                    <el-button size="small" @click="$refs.datafile.click()" type="warning">重新选择</el-button>
+                    <el-button size="small" @click="step++, generate()" :disabled="count === 0" type="primary">生成日报</el-button>
                 </div>
                 <div class="sum">
                     <el-pagination
@@ -57,11 +66,29 @@
                 </el-table-column>
             </el-table>
             <div class="box-btn-bottom-right">
-                <el-date-picker size="small" type="daterange" :picker-options="pickerOptions" v-model="datatime" @change="generate()" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
-                <el-button size="small" @click="exportData">导出</el-button>
+                <el-button v-if="notType.length > 0" size="small" type="danger" title="点击查看" @click="notTypeDialog = true">异常({{notType.length}})</el-button>
+                <el-date-picker
+                    size="small"
+                    type="daterange"
+                    :picker-options="pickerOptions"
+                    v-model="datatime" @change="generate()"
+                    value-format="yyyy-MM-dd"
+                    range-separator="至"
+                    start-placeholder="开始日期"
+                    end-placeholder="结束日期"></el-date-picker>
+                <el-button size="small" @click="exportData" type="primary">导出</el-button>
             </div>
             <el-button size="small" @click="step--" class="box-btn-bottom-left">上一步</el-button>
         </div>
+        <el-dialog title="未统计到的业务子分类" :visible.sync="notTypeDialog">
+            <el-table :data="notType">
+                <el-table-column type="index"></el-table-column>
+                <el-table-column label="业务子类型" prop="name"></el-table-column>
+            </el-table>
+            <template slot="footer">
+                <el-button size="small" @click="notTypeDialog = false" type="primary">关闭</el-button>
+            </template>
+        </el-dialog>
     </div>
 </template>
 
@@ -129,7 +156,9 @@ export default {
             size: 20, // 当前显示数量
             count: 0, // 当前统计
             pickerOptions: {},
-            dataStats: []
+            dataStats: [],
+            notType: [], // 未计入日报统计的业务子类型
+            notTypeDialog: false
         };
     },
     created() {
@@ -183,7 +212,7 @@ export default {
             return data;
         },
         list() {
-            let list = this.data.filter((v, i) => this.page * this.size - this.size < i + 1 && i + 1 < this.page * this.size);
+            let list = this.data.filter((v, i) => this.page * this.size - this.size < i + 1 && i + 1 <= this.page * this.size);
             return list;
         }
     },
@@ -244,6 +273,63 @@ export default {
                 this.loading = false;
             };
             reader.readAsBinaryString(input);
+        },
+        // 导入数据表
+        datafile(name) {
+            let input = this.$refs.datafile.files[0];
+            this.timelist = [];
+            if (input) {
+                this.loading = true;
+                let reader = new FileReader();
+                reader.onload = () => {
+                    let wb = xlsx.read(reader.result, {
+                        type: 'binary'
+                    });
+                    let outdata = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    let data = [];
+                    this.datahead.forEach((v, n) => {
+                        if (v === this.row) this.row = name + n;
+                        if (v === this.type) this.type = name + n;
+                        if (v === this.time) this.time = name + n;
+                        outdata.forEach((val, i) => {
+                            data[i] = { ...data[i], [name + n]: '' };
+                            data[i][name + n] = val[v];
+                        });
+                    });
+                    this.sum = data.length;
+                    this.$nextTick(() => {
+                        let statslist = [];
+                        // 过滤时间
+                        data.forEach(m => {
+                            var obj = null;
+                            statslist.forEach(n => {
+                                if (n.time === m[this.time].split(' ')[0]) {
+                                    obj = n;
+                                }
+                            });
+                            if (!obj) {
+                                obj = {
+                                    time: m[this.time].split(' ')[0],
+                                    data: []
+                                };
+                                this.timelist.push(m[this.time].split(' ')[0]);
+                                statslist.push(obj);
+                            }
+                            obj.data.push(m);
+                        });
+                        if (this.timelist.length < 1) {
+                            this.datatime = [];
+                        } else {
+                            let date1 = this.timelist[0], date2 = this.timelist[this.timelist.length - 1];
+                            this.datatime = new Date(date1) < new Date(date2) ? [date1, date2] : [date2, date1];
+                        }
+                        this.datalist = statslist;
+                        this.loading = false;
+                        this.generate();
+                    });
+                };
+                reader.readAsBinaryString(input);
+            }
         },
         // 生成日报头部
         generatehead(data) {
@@ -334,65 +420,18 @@ export default {
             });
             return column;
         },
-        // 导入数据表
-        datafile(name) {
-            let input = this.$refs.datafile.files[0];
-            this.timelist = [];
-            if (input) {
-                this.loading = true;
-                let reader = new FileReader();
-                reader.onload = () => {
-                    let wb = xlsx.read(reader.result, {
-                        type: 'binary'
-                    });
-                    let outdata = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                    let data = [];
-                    this.datahead.forEach((v, n) => {
-                        if (v === this.row) this.row = name + n;
-                        if (v === this.type) this.type = name + n;
-                        if (v === this.time) this.time = name + n;
-                        outdata.forEach((val, i) => {
-                            data[i] = { ...data[i], [name + n]: '' };
-                            data[i][name + n] = val[v];
-                        });
-                    });
-                    this.sum = data.length;
-                    this.$nextTick(() => {
-                        let statslist = [];
-                        // 过滤时间
-                        data.forEach(m => {
-                            var obj = null;
-                            statslist.forEach(n => {
-                                if (n.time === m[this.time].split(' ')[0]) {
-                                    obj = n;
-                                }
-                            });
-                            if (!obj) {
-                                obj = {
-                                    time: m[this.time].split(' ')[0],
-                                    data: []
-                                };
-                                this.timelist.push(m[this.time].split(' ')[0]);
-                                statslist.push(obj);
-                            }
-                            obj.data.push(m);
-                        });
-                        if (this.timelist.length < 1) {
-                            this.datatime = [];
-                        } else {
-                            let date1 = this.timelist[0], date2 = this.timelist[this.timelist.length - 1];
-                            this.datatime = new Date(date1) < new Date(date2) ? [date1, date2] : [date2, date1];
-                        }
-                        this.datalist = statslist;
-                        this.loading = false;
-                        this.generate();
-                    });
-                };
-                reader.readAsBinaryString(input);
-            }
-        },
         // 生成日报
         generate() {
+            let notType = [];
+            // 过滤业务类型列表中没有的业务类型数据
+            this.dataStats.forEach(v => {
+                v.data.forEach(x => {
+                    if (!this.typelist.some(y => y[this.three] === x[this.type])) {
+                        notType.push({ name: x[this.type] });
+                    }
+                });
+            });
+            this.notType = notType;
             let list = [];
             // 筛选出各公司的数据
             this.dataStats.forEach(v => {
