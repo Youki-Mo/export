@@ -27,11 +27,9 @@
                     <el-table-column v-for="(item, i) in datahead" :key="i" :prop="'data'+i" :label="item" :width="item.length * 30"></el-table-column>
                 </el-table>
                 <div class="box-btn-bottom-right">
+                    <el-date-picker size="small" type="daterange" :picker-options="pickerOptions" v-model="datatime" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
                     <el-button size="small" @click="$refs.datafile.click()">重新选择</el-button>
                     <el-button size="small" @click="step++, generate()" :disabled="count === 0">生成日报</el-button>
-                </div>
-                <div class="box-select-bottom">
-                    <el-date-picker size="small" type="dates" :picker-options="pickerOptions" :default-value="defaultTime" v-model="datatime" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
                 </div>
                 <div class="sum">
                     <el-pagination
@@ -59,7 +57,7 @@
                 </el-table-column>
             </el-table>
             <div class="box-btn-bottom-right">
-                <el-date-picker size="small" type="dates" :picker-options="pickerOptions" v-model="datatime" :default-value="defaultTime" @change="generate()" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
+                <el-date-picker size="small" type="daterange" :picker-options="pickerOptions" v-model="datatime" @change="generate()" value-format="yyyy-MM-dd" placeholder="选择一个或多个日期"></el-date-picker>
                 <el-button size="small" @click="exportData">导出</el-button>
             </div>
             <el-button size="small" @click="step--" class="box-btn-bottom-left">上一步</el-button>
@@ -135,67 +133,48 @@ export default {
         };
     },
     created() {
-        let _this = this;
+        const _this = this;
         this.pickerOptions = {
             shortcuts: [{
                 text: '全部',
                 onClick(picker) {
-                    picker.$emit('pick', _this.timelist);
+                    if (_this.timelist.length === 1) {
+                        picker.$emit('pick', [_this.timelist[0], _this.timelist[0]]);
+                    } else if (_this.timelist.length > 1) {
+                        let date1 = _this.timelist[0], date2 = _this.timelist[this.timelist.length - 1];
+                        picker.$emit('pick', new Date(date1) < new Date(date2) ? [date1, date2] : [date2, date1]);
+                    }
                 }
             }, {
                 text: '最近一周',
                 onClick(picker) {
-                    const date = new Date();
-                    let list = [];
-                    for (let i = 0; i <= 7 - 1; i++) {
-                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
-                    }
-                    list = list.map(v => {
-                        let y = new Date(v).getFullYear(),
-                            m = new Date(v).getMonth() + 1,
-                            d = new Date(v).getDate();
-                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
-                    });
-                    picker.$emit('pick', list);
+                    const end = new Date();
+                    const start = new Date();
+                    start.setTime(end.getTime() - 3600 * 24000 * 7);
+                    picker.$emit('pick', [start, end]);
                 }
             }, {
                 text: '最近一个月',
                 onClick(picker) {
-                    const date = new Date();
-                    let list = [];
-                    for (let i = 0; i <= 30 - 1; i++) {
-                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
-                    }
-                    list = list.map(v => {
-                        let y = new Date(v).getFullYear(),
-                            m = new Date(v).getMonth() + 1,
-                            d = new Date(v).getDate();
-                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
-                    });
-                    picker.$emit('pick', list);
+                    const end = new Date();
+                    const start = new Date();
+                    start.setTime(end.getTime() - 3600 * 24000 * 30);
+                    picker.$emit('pick', [start, end]);
                 }
             }, {
                 text: '最近三个月',
                 onClick(picker) {
-                    const date = new Date();
-                    let list = [];
-                    for (let i = 0; i <= 90 - 1; i++) {
-                        list[list.length] = date.getTime() - 3600 * 1000 * 24 * i;
-                    }
-                    list = list.map(v => {
-                        let y = new Date(v).getFullYear(),
-                            m = new Date(v).getMonth() + 1,
-                            d = new Date(v).getDate();
-                        return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
-                    });
-                    picker.$emit('pick', list);
+                    const end = new Date();
+                    const start = new Date();
+                    start.setTime(end.getTime() - 3600 * 24000 * 90);
+                    picker.$emit('pick', [start, end]);
                 }
             }]
         };
     },
     computed: {
         data() {
-            let time = !this.datatime ? [] : this.datatime;
+            let time = !this.datatime ? [] : this.formatTime(this.datatime);
             let item = this.datalist.filter((v, i) => time.indexOf(v.time) >= 0);
             let data = [];
             for (let i in item) {
@@ -206,9 +185,6 @@ export default {
         list() {
             let list = this.data.filter((v, i) => this.page * this.size - this.size < i + 1 && i + 1 < this.page * this.size);
             return list;
-        },
-        defaultTime() {
-            return this.datatime && this.datatime.length !== 0 ? this.datatime[0] : this.timelist[0];
         }
     },
     watch: {
@@ -216,16 +192,13 @@ export default {
             this.count = val.length;
         },
         datatime(val) {
-            let time = !val ? [] : val;
+            let time = !val ? [] : this.formatTime(val);
             let item = this.datalist.filter((v, i) => time.indexOf(v.time) >= 0);
             let data = [];
             for (let i in item) {
                 data = [...data, ...item[i].data];
             }
             this.dataStats = [{ data }];
-        },
-        step(val) {
-            console.log(this.$refs[`table${val + 1}`]);
         }
     },
     mounted() {
@@ -274,7 +247,7 @@ export default {
         },
         // 生成日报头部
         generatehead(data) {
-            let column = [ { title: '单位名称', dataIndex: 'corp', width: 100 } ];
+            let column = [ { title: '单位名称', dataIndex: 'corp', width: 100, exportTitle: '单位名称' } ];
             data.forEach(m => {
                 var first = null;
                 column.forEach(n => {
@@ -311,9 +284,9 @@ export default {
                     two.children.push({
                         title: m[this.three],
                         children: [
-                            { title: '数量', dataIndex: m[this.first] + m[this.two] + m[this.three] + '数量' },
-                            { title: '同比', dataIndex: m[this.first] + m[this.two] + m[this.three] + '同比' },
-                            { title: '占比', dataIndex: m[this.first] + m[this.two] + m[this.three] + '占比' }
+                            { title: '数量', dataIndex: m[this.first] + m[this.two] + m[this.three] + '数量', exportTitle: m[this.first] + '-' + m[this.two] + '-' + m[this.three] + '-数量' },
+                            { title: '同比', dataIndex: m[this.first] + m[this.two] + m[this.three] + '同比', exportTitle: m[this.first] + '-' + m[this.two] + '-' + m[this.three] + '-同比' },
+                            { title: '占比', dataIndex: m[this.first] + m[this.two] + m[this.three] + '占比', exportTitle: m[this.first] + '-' + m[this.two] + '-' + m[this.three] + '-占比' }
                         ]
                     });
                 });
@@ -321,18 +294,18 @@ export default {
                     val.children.push({
                         title: '小计',
                         children: [
-                            { title: '数量', dataIndex: v.title + val.title + '数量' },
-                            { title: '同比', dataIndex: v.title + val.title + '同比' },
-                            { title: '占比', dataIndex: v.title + val.title + '占比' }
+                            { title: '数量', dataIndex: v.title + val.title + '数量', exportTitle: v.title + '-' + val.title + '-小计-数量' },
+                            { title: '同比', dataIndex: v.title + val.title + '同比', exportTitle: v.title + '-' + val.title + '-小计-同比' },
+                            { title: '占比', dataIndex: v.title + val.title + '占比', exportTitle: v.title + '-' + val.title + '-小计-占比' }
                         ]
                     });
                 });
                 col.push({
                     title: '合计',
                     children: [
-                        { title: '数量', dataIndex: v.title + '数量' },
-                        { title: '同比', dataIndex: v.title + '同比' },
-                        { title: '占比', dataIndex: v.title + '占比' }
+                        { title: '数量', dataIndex: v.title + '数量', exportTitle: v.title + '-合计-数量' },
+                        { title: '同比', dataIndex: v.title + '同比', exportTitle: v.title + '-合计-同比' },
+                        { title: '占比', dataIndex: v.title + '占比', exportTitle: v.title + '-合计-占比' }
                     ]
                 });
                 v.children = col;
@@ -341,8 +314,8 @@ export default {
             column.push({
                 title: '总计计',
                 children: [
-                    { title: '数量', dataIndex: '数量' },
-                    { title: '同比', dataIndex: '同比' }
+                    { title: '数量', dataIndex: '数量', exportTitle: '数量' },
+                    { title: '同比', dataIndex: '同比', exportTitle: '同比' }
                 ]
             });
 
@@ -404,7 +377,12 @@ export default {
                             }
                             obj.data.push(m);
                         });
-                        this.datatime = this.timelist;
+                        if (this.timelist.length < 1) {
+                            this.datatime = [];
+                        } else {
+                            let date1 = this.timelist[0], date2 = this.timelist[this.timelist.length - 1];
+                            this.datatime = new Date(date1) < new Date(date2) ? [date1, date2] : [date2, date1];
+                        }
                         this.datalist = statslist;
                         this.loading = false;
                         this.generate();
@@ -514,12 +492,19 @@ export default {
                     // 合计
                     this.statslist.push(info);
                 });
+                // 补0
+                this.statslist.forEach(v => {
+                    this.formatStatsHead(this.statshead).forEach(val => {
+                        v[val.dataIndex] = v[val.dataIndex] ? v[val.dataIndex] : (val.dataIndex.indexOf('同比') >= 0 ? '-' : 0);
+                    });
+                });
             });
         },
         exportData() {
             let head = this.formatStatsHead(this.statshead);
             let data = this.statslist.map(v => head.map(j => v[j.dataIndex]));
-            exportJsonToExcel(head.map(v => v.dataIndex === 'corp' ? '单位名称' : v.dataIndex), data, `${this.datatime.join('|')}日报`);
+            let title = this.datatime[0] === this.datatime[1] ? `${this.datatime[0]}日报` : `${this.datatime.join('至')}日报`;
+            exportJsonToExcel(head.map(v => v.dataIndex === 'corp' ? '单位名称' : v.exportTitle), data, title);
         },
         // 格式化表头（便于导出功能使用）
         formatStatsHead(data) {
@@ -535,6 +520,24 @@ export default {
         },
         handleCurrentChange(val) {
             this.page = val;
+        },
+        formatTime(timeArr) {
+            if (timeArr.length <= 1) return timeArr;
+            let start = new Date(timeArr[0]).getTime();
+            let end = new Date(timeArr[1]).getTime();
+            let day = Math.ceil((end - start) / 3600 / 24000) + 1;
+            if (day === 0) return timeArr[0];
+            let list = [];
+            for (let i = 0; i <= day - 1; i++) {
+                list[list.length] = start + 3600 * 24000 * i;
+            }
+            list = list.map(v => {
+                let y = new Date(v).getFullYear(),
+                    m = new Date(v).getMonth() + 1,
+                    d = new Date(v).getDate();
+                return `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+            });
+            return list;
         }
     }
 };
@@ -585,10 +588,7 @@ body,
   padding-bottom: 42px;
   position: relative;
   &.active {
-    padding-bottom: 102px;
-    .box-select-bottom {
-        bottom: 20px;
-    }
+    padding-bottom: 62px;
     [class*='box-btn-bottom'] {
         bottom: -15px;
     }
@@ -609,16 +609,6 @@ body,
 .box-btn-bottom-left {
     left: 0;
 }
-.box-select-bottom {
-    position: absolute;
-    width: 100%;
-    height: 40px;
-    overflow: auto;
-    bottom: 0;
-    .el-date-editor.el-input, .el-date-editor.el-input__inner {
-        width: 100%;
-    }
-}
 .center {
   position: relative;
   left: 50%;
@@ -627,7 +617,7 @@ body,
 }
 .sum {
     position: absolute;
-    bottom: 70px;
+    bottom: 30px;
     height: 30px;
     font-size: 14px;
     color: #999;
